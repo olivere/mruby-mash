@@ -247,12 +247,12 @@ make_mash(mrb_state *mrb, mrb_value name, mrb_value members, struct RClass * kla
   else {
     /* old style: should we warn? */
     name = mrb_str_to_str(mrb, name);
-    id = mrb_to_id(mrb, name);
+    id = mrb_obj_to_sym(mrb, name);
     if (!mrb_mash_is_const_id(id)) {
       mrb_raisef(mrb, E_NAME_ERROR, "identifier %s needs to be constant", mrb_string_value_ptr(mrb, name));
     }
     if (mrb_const_defined_at(mrb, klass, id)) {
-      mrb_warn("redefining constant Mash::%s", mrb_string_value_ptr(mrb, name));
+      mrb_warn(mrb, "redefining constant Mash::%s", mrb_string_value_ptr(mrb, name));
       //?rb_mod_remove_const(klass, mrb_sym2name(mrb, id));
     }
     c = mrb_define_class_under(mrb, klass, RSTRING_PTR(name), klass);
@@ -377,7 +377,7 @@ mrb_mash_s_def(mrb_state *mrb, mrb_value klass)
       rest = mrb_ary_new_from_values(mrb, argcnt, pargv);
     }
     for (i=0; i<RARRAY_LEN(rest); i++) {
-      id = mrb_to_id(mrb, RARRAY_PTR(rest)[i]);
+      id = mrb_obj_to_sym(mrb, RARRAY_PTR(rest)[i]);
       RARRAY_PTR(rest)[i] = mrb_symbol_value(id);
     }
   }
@@ -573,7 +573,7 @@ mrb_mash_aref_n(mrb_state *mrb, mrb_value s, mrb_value idx)
   mrb_int i;
 
   if (mrb_string_p(idx) || mrb_symbol_p(idx)) {
-    return mrb_mash_aref_id(mrb, s, mrb_to_id(mrb, idx));
+    return mrb_mash_aref_id(mrb, s, mrb_obj_to_sym(mrb, idx));
   }
 
   i = mrb_fixnum(idx);
@@ -655,7 +655,7 @@ mrb_mash_aset(mrb_state *mrb, mrb_value s)
   mrb_get_args(mrb, "oo", &idx, &val);
 
   if (mrb_string_p(idx) || mrb_symbol_p(idx)) {
-    return mrb_mash_aset_id(mrb, s, mrb_to_id(mrb, idx), val);
+    return mrb_mash_aset_id(mrb, s, mrb_obj_to_sym(mrb, idx), val);
   }
 
   i = mrb_fixnum(idx);
@@ -708,7 +708,7 @@ mrb_mash_equal(mrb_state *mrb, mrb_value s)
     equal_p = 0;
   }
   else if (RSTRUCT_LEN(s) != RSTRUCT_LEN(s2)) {
-    mrb_bug("inconsistent mash"); /* should never happen */
+    mrb_bug(mrb, "inconsistent mash"); /* should never happen */
     equal_p = 0; /* This substuture is just to suppress warnings. never called. */
   }
   else {
@@ -752,7 +752,7 @@ mrb_mash_eql(mrb_state *mrb, mrb_value s)
     eql_p = 0;
   }
   else if (RSTRUCT_LEN(s) != RSTRUCT_LEN(s2)) {
-    mrb_bug("inconsistent mash"); /* should never happen */
+    mrb_bug(mrb, "inconsistent mash"); /* should never happen */
     eql_p = 0; /* This substuture is just to suppress warnings. never called. */
   }
   else {
