@@ -43,13 +43,13 @@ mash_ivar_get(mrb_state *mrb, mrb_value c, mrb_sym id)
 mrb_value
 mrb_mash_iv_get(mrb_state *mrb, mrb_value c, const char *name)
 {
-  return mash_ivar_get(mrb, c, mrb_intern(mrb, name));
+  return mash_ivar_get(mrb, c, mrb_intern_cstr(mrb, name));
 }
 
 mrb_value
 mrb_mash_s_members(mrb_state *mrb, mrb_value klass)
 {
-  mrb_value members = mash_ivar_get(mrb, klass, mrb_intern2(mrb, "__members__", 11));
+  mrb_value members = mash_ivar_get(mrb, klass, mrb_intern(mrb, "__members__", 11));
 
   if (mrb_nil_p(members)) {
     mrb_raise(mrb, E_TYPE_ERROR, "uninitialized mash");
@@ -176,7 +176,7 @@ mrb_mash_id_attrset(mrb_state *mrb, mrb_sym id)
   buf[len] = '=';
   buf[len+1] = '\0';
 
-  mid = mrb_intern2(mrb, buf, len+1);
+  mid = mrb_intern(mrb, buf, len+1);
   mrb_free(mrb, buf);
   return mid;
 }
@@ -192,7 +192,7 @@ mrb_mash_set(mrb_state *mrb, mrb_value obj, mrb_value val)
 
   /* get base id */
   name = mrb_sym2name_len(mrb, mrb->c->ci->mid, &len);
-  mid = mrb_intern2(mrb, name, len-1); /* omit last "=" */
+  mid = mrb_intern(mrb, name, len-1); /* omit last "=" */
 
   members = mrb_mash_members(mrb, obj);
   ptr_members = RARRAY_PTR(members);
@@ -259,7 +259,7 @@ make_mash(mrb_state *mrb, mrb_value name, mrb_value members, struct RClass * kla
   }
   MRB_SET_INSTANCE_TT(c, MRB_TT_ARRAY);
   nstr = mrb_obj_value(c);
-  mrb_iv_set(mrb, nstr, mrb_intern2(mrb, "__members__", 11), members);
+  mrb_iv_set(mrb, nstr, mrb_intern(mrb, "__members__", 11), members);
 
   mrb_define_class_method(mrb, c, "new", mrb_instance_new, ARGS_ANY());
   mrb_define_class_method(mrb, c, "[]", mrb_instance_new, ARGS_ANY());
@@ -295,7 +295,7 @@ mrb_mash_define(mrb_state *mrb, const char *name, ...)
 
   va_start(ar, name);
   while ((mem = va_arg(ar, char*)) != 0) {
-    mrb_sym slot = mrb_intern(mrb, mem);
+    mrb_sym slot = mrb_intern_cstr(mrb, mem);
     mrb_ary_push(mrb, ary, mrb_symbol_value(slot));
   }
   va_end(ar);
@@ -394,7 +394,7 @@ num_members(mrb_state *mrb, struct RClass *klass)
 {
   mrb_value members;
 
-  members = mash_ivar_get(mrb, mrb_obj_value(klass), mrb_intern2(mrb, "__members__", 11));
+  members = mash_ivar_get(mrb, mrb_obj_value(klass), mrb_intern(mrb, "__members__", 11));
   if (!mrb_array_p(members)) {
     mrb_raise(mrb, E_TYPE_ERROR, "broken members");
   }
