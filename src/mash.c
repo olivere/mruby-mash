@@ -13,9 +13,8 @@
 #include "mruby/data.h"
 #include "mruby/variable.h"
 
-#define RSTRUCT_ARY(st) mrb_ary_ptr(st)
-#define RSTRUCT_LEN(st) RSTRUCT_ARY(st)->len
-#define RSTRUCT_PTR(st) RSTRUCT_ARY(st)->ptr
+#define RSTRUCT_LEN(st) mrb_ary_ptr(st)->len
+#define RSTRUCT_PTR(st) mrb_ary_ptr(st)->ptr
 
 static struct RClass *
 mash_class(mrb_state *mrb)
@@ -67,8 +66,8 @@ mrb_mash_members(mrb_state *mrb, mrb_value s)
   if (!strcmp(mrb_class_name(mrb, mrb_obj_class(mrb, s)), "Mash")) {
     if (RSTRUCT_LEN(s) != RARRAY_LEN(members)) {
       mrb_raisef(mrb, E_TYPE_ERROR,
-                 "mash size differs (%" PRIdMRB_INT " required %" PRIdMRB_INT " given)",
-                 RARRAY_LEN(members), RSTRUCT_LEN(s));
+                 "mash size differs (%S required %S given)",
+                 mrb_fixnum_value(RARRAY_LEN(members)), mrb_fixnum_value(RSTRUCT_LEN(s)));
     }
   }
   return members;
@@ -78,15 +77,10 @@ static mrb_value
 mrb_mash_s_members_m(mrb_state *mrb, mrb_value klass)
 {
   mrb_value members, ary;
-  mrb_value *p, *pend;
 
   members = mrb_mash_s_members(mrb, klass);
   ary = mrb_ary_new_capa(mrb, RARRAY_LEN(members));
-  p = RARRAY_PTR(members); pend = p + RARRAY_LEN(members);
-  while (p < pend) {
-    mrb_ary_push(mrb, ary, *p);
-    p++;
-  }
+  mrb_ary_replace(mrb, ary, members);
   return ary;
 }
 
@@ -112,7 +106,8 @@ mrb_mash_members_m(mrb_state *mrb, mrb_value obj)
 mrb_value
 mrb_mash_getmember(mrb_state *mrb, mrb_value obj, mrb_sym id)
 {
-  mrb_value members, slot, *ptr, *ptr_members;
+  mrb_value members, slot, *ptr;
+  const mrb_value *ptr_members;
   mrb_int i, len;
 
   ptr = RSTRUCT_PTR(obj);
@@ -167,7 +162,7 @@ mrb_mash_id_attrset(mrb_state *mrb, mrb_sym id)
 {
   const char *name;
   char *buf;
-  size_t len;
+  mrb_int len;
   mrb_sym mid;
 
   name = mrb_sym2name_len(mrb, id, &len);
@@ -186,9 +181,10 @@ mrb_mash_set(mrb_state *mrb, mrb_value obj, mrb_value val)
 {
   const char *name;
   int i;
-  size_t len;
+  mrb_int len;
   mrb_sym mid;
-  mrb_value members, slot, *ptr, *ptr_members;
+  mrb_value members, slot, *ptr;
+  const mrb_value *ptr_members;
 
   /* get base id */
   name = mrb_sym2name_len(mrb, mrb->c->ci->mid, &len);
@@ -236,7 +232,8 @@ mrb_mash_is_const_id(mrb_sym id)
 static mrb_value
 make_mash(mrb_state *mrb, mrb_value name, mrb_value members, struct RClass * klass)
 {
-  mrb_value nstr, *ptr_members;
+  mrb_value nstr;
+  const mrb_value *ptr_members;
   mrb_sym id;
   mrb_int i, len;
   struct RClass *c;
@@ -251,7 +248,7 @@ make_mash(mrb_state *mrb, mrb_value name, mrb_value members, struct RClass * kla
     if (!mrb_mash_is_const_id(id)) {
       mrb_raisef(mrb, E_NAME_ERROR, "identifier %s needs to be constant", mrb_string_value_ptr(mrb, name));
     }
-    if (mrb_const_defined_at(mrb, klass, id)) {
+    if (mrb_const_defined_at(mrb, mrb_obj_value(klass), id)) {
       mrb_warn(mrb, "redefining constant Mash::%s", mrb_string_value_ptr(mrb, name));
       //?rb_mod_remove_const(klass, mrb_sym2name(mrb, id));
     }
@@ -378,7 +375,7 @@ mrb_mash_s_def(mrb_state *mrb, mrb_value klass)
     }
     for (i=0; i<RARRAY_LEN(rest); i++) {
       id = mrb_obj_to_sym(mrb, RARRAY_PTR(rest)[i]);
-      RARRAY_PTR(rest)[i] = mrb_symbol_value(id);
+      mrb_ary_set(mrb, rest, i, mrb_symbol_value(id));
     }
   }
   st = make_mash(mrb, name, rest, mash_class(mrb));
@@ -434,18 +431,21 @@ mrb_mash_initialize_m(mrb_state *mrb, /*int argc, mrb_value *argv,*/ mrb_value s
   return mrb_mash_initialize_withArg(mrb, argc, argv, self);
 }
 
+/*
 mrb_value
 mrb_mash_initialize(mrb_state *mrb, mrb_value self, mrb_value values)
 {
   return mrb_mash_initialize_withArg(mrb, RARRAY_LEN(values), RARRAY_PTR(values), self);
 }
+*/
 
 static mrb_value
 inspect_mash(mrb_state *mrb, mrb_value s, int recur)
 {
   const char *cn = mrb_class_name(mrb, mrb_obj_class(mrb, s));
   mrb_value members, str = mrb_str_new(mrb, "#<mash ", 9);
-  mrb_value *ptr, *ptr_members;
+  mrb_value *ptr;
+  const mrb_value *ptr_members;
   mrb_int i, len;
 
   if (cn) {
@@ -473,7 +473,7 @@ inspect_mash(mrb_state *mrb, mrb_value s, int recur)
     id = mrb_symbol(slot);
     if (mrb_mash_is_local_id(id) || mrb_mash_is_const_id(id)) {
       const char *name;
-      size_t len;
+      mrb_int len;
 
       name = mrb_sym2name_len(mrb, id, &len);
       mrb_str_append(mrb, str, mrb_str_new(mrb, name, len));
@@ -532,7 +532,8 @@ mrb_mash_init_copy(mrb_state *mrb, mrb_value copy)
 static mrb_value
 mrb_mash_aref_id(mrb_state *mrb, mrb_value s, mrb_sym id)
 {
-  mrb_value *ptr, members, *ptr_members;
+  mrb_value *ptr, members;
+  const mrb_value *ptr_members;
   mrb_int i, len;
 
   ptr = RSTRUCT_PTR(s);
@@ -580,12 +581,12 @@ mrb_mash_aref_n(mrb_state *mrb, mrb_value s, mrb_value idx)
   if (i < 0) i = RSTRUCT_LEN(s) + i;
   if (i < 0)
       mrb_raisef(mrb, E_INDEX_ERROR,
-                 "offset %" PRIdMRB_INT " too small for mash(size:%" PRIdMRB_INT ")",
-                 i, RSTRUCT_LEN(s));
+                 "offset %S too small for mash(size:%S)",
+                 mrb_fixnum_value(i), mrb_fixnum_value(RSTRUCT_LEN(s)));
   if (RSTRUCT_LEN(s) <= i)
     mrb_raisef(mrb, E_INDEX_ERROR,
-               "offset %" PRIdMRB_INT " too large for mash(size:%" PRIdMRB_INT ")",
-               i, RSTRUCT_LEN(s));
+               "offset %S too large for mash(size:%S)",
+               mrb_fixnum_value(i), mrb_fixnum_value(RSTRUCT_LEN(s)));
   return RSTRUCT_PTR(s)[i];
 }
 
@@ -601,15 +602,16 @@ mrb_mash_aref(mrb_state *mrb, mrb_value s)
 static mrb_value
 mrb_mash_aset_id(mrb_state *mrb, mrb_value s, mrb_sym id, mrb_value val)
 {
-  mrb_value members, *ptr, *ptr_members;
+  mrb_value members, *ptr;
+  const mrb_value *ptr_members;
   mrb_int i, len;
 
   members = mrb_mash_members(mrb, s);
   len = RARRAY_LEN(members);
   if (RSTRUCT_LEN(s) != len) {
     mrb_raisef(mrb, E_TYPE_ERROR,
-               "mash size differs (%" PRIdMRB_INT " required %" PRIdMRB_INT " given)",
-               len, RSTRUCT_LEN(s));
+               "mash size differs (%S required %S given)",
+               mrb_fixnum_value(len), mrb_fixnum_value(RSTRUCT_LEN(s)));
   }
   ptr = RSTRUCT_PTR(s);
   ptr_members = RARRAY_PTR(members);
@@ -662,13 +664,13 @@ mrb_mash_aset(mrb_state *mrb, mrb_value s)
   if (i < 0) i = RSTRUCT_LEN(s) + i;
   if (i < 0) {
     mrb_raisef(mrb, E_INDEX_ERROR,
-               "offset %" PRIdMRB_INT " too small for mash(size:%" PRIdMRB_INT ")",
-               i, RSTRUCT_LEN(s));
+               "offset %S too small for mash(size:%S)",
+               mrb_fixnum_value(i), mrb_fixnum_value(RSTRUCT_LEN(s)));
   }
   if (RSTRUCT_LEN(s) <= i) {
     mrb_raisef(mrb, E_INDEX_ERROR,
-               "offset %" PRIdMRB_INT " too large for mash(size:%" PRIdMRB_INT ")",
-               i, RSTRUCT_LEN(s));
+               "offset %S too large for mash(size:%S)",
+               mrb_fixnum_value(i), mrb_fixnum_value(RSTRUCT_LEN(s)));
   }
   return RSTRUCT_PTR(s)[i] = val;
 }
